@@ -21,6 +21,11 @@ export const env = {
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean),
+  // Optional at boot so the server still runs without AI configured; the AI
+  // endpoints surface a clear 503 when it's missing (see config/anthropic.js).
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+  // Model used for all AI features. Override per-environment if needed.
+  aiModel: process.env.AI_MODEL || 'claude-opus-4-8',
 };
 
 export const isProd = env.nodeEnv === 'production';
