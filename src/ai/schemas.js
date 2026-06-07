@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 /**
- * Zod schemas shared by the AI features. Passed to the Anthropic SDK via
- * `zodOutputFormat` so Claude's responses are constrained to valid JSON that
- * matches these shapes — no fragile prompt-parsing required.
+ * Zod schemas shared by the AI features. Passed to the OpenAI SDK via
+ * `zodResponseFormat` so the model's responses are constrained to valid JSON
+ * that matches these shapes — no fragile prompt-parsing required.
  */
 
 // The field types the form builder supports. Keep in sync with the frontend

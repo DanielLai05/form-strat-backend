@@ -1,5 +1,5 @@
-import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
-import { getAnthropic } from '../config/anthropic.js';
+import { zodResponseFormat } from 'openai/helpers/zod';
+import { getAIClient } from '../config/openrouter.js';
 import { env } from '../config/env.js';
 import { ApiError } from '../utils/ApiError.js';
 import {
@@ -17,6 +17,31 @@ You produce clean, accessible form schemas. Rules:
 - Mark a field required only when it is genuinely essential.`;
 
 /**
+ * Run a structured-output chat completion and return the validated object.
+ * Throws a 502 if the model refused or returned nothing parseable.
+ */
+const parseStructured = async ({ schema, schemaName, userContent }) => {
+  const client = getAIClient();
+  const completion = await client.chat.completions.parse({
+    model: env.aiModel,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: userContent },
+    ],
+    response_format: zodResponseFormat(schema, schemaName),
+  });
+
+  const message = completion.choices[0]?.message;
+  if (message?.refusal) {
+    throw new ApiError(502, `The model refused: ${message.refusal}`);
+  }
+  if (!message?.parsed) {
+    throw new ApiError(502, 'The model did not return a valid response');
+  }
+  return message.parsed;
+};
+
+/**
  * POST /api/ai/generate-form
  * Body: { prompt: string }
  * Generates a complete form schema from a natural-language description.
@@ -27,25 +52,11 @@ export const generateForm = async (req, res) => {
     throw ApiError.badRequest('"prompt" is required and must be a string');
   }
 
-  const client = getAnthropic();
-  const message = await client.beta.messages.parse({
-    model: env.aiModel,
-    max_tokens: 4096,
-    thinking: { type: 'adaptive' },
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: `Create a form for the following request:\n\n${prompt}`,
-      },
-    ],
-    output_format: betaZodOutputFormat(generatedFormSchema, 'form'),
+  const form = await parseStructured({
+    schema: generatedFormSchema,
+    schemaName: 'form',
+    userContent: `Create a form for the following request:\n\n${prompt}`,
   });
-
-  const form = message.parsed_output;
-  if (!form) {
-    throw new ApiError(502, 'The model did not return a valid form');
-  }
   res.json({ data: form });
 };
 
@@ -66,28 +77,14 @@ export const suggestFields = async (req, res) => {
     2
   );
 
-  const client = getAnthropic();
-  const message = await client.beta.messages.parse({
-    model: env.aiModel,
-    max_tokens: 4096,
-    thinking: { type: 'adaptive' },
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content:
-          `Here is the current form draft:\n\n${existing}\n\n` +
-          'Suggest additional or improved fields that would make this form more ' +
-          'complete and useful. Do not repeat fields that already exist. Return ' +
-          'only the new suggested fields plus a short rationale.',
-      },
-    ],
-    output_format: betaZodOutputFormat(suggestedFieldsSchema, 'suggestions'),
+  const result = await parseStructured({
+    schema: suggestedFieldsSchema,
+    schemaName: 'suggestions',
+    userContent:
+      `Here is the current form draft:\n\n${existing}\n\n` +
+      'Suggest additional or improved fields that would make this form more ' +
+      'complete and useful. Do not repeat fields that already exist. Return ' +
+      'only the new suggested fields plus a short rationale.',
   });
-
-  const result = message.parsed_output;
-  if (!result) {
-    throw new ApiError(502, 'The model did not return valid suggestions');
-  }
   res.json({ data: result });
 };

@@ -1,14 +1,14 @@
 # Form Strat — Backend API
 
 Express + PostgreSQL REST API for the **Form Strat** AI form builder. Uses the
-`pg` driver with raw, parameterized SQL (no ORM), and Claude (via the official
-Anthropic SDK) for AI form generation, field suggestions, and analytics.
+`pg` driver with raw, parameterized SQL (no ORM), and an LLM via **OpenRouter**
+(OpenAI-compatible) for AI form generation, field suggestions, and analytics.
 
 ## Tech stack
 
 - **Express 4** — HTTP server & routing
 - **pg** — PostgreSQL client (connection pool + parameterized queries)
-- **@anthropic-ai/sdk** + **Zod** — Claude with structured outputs (guaranteed-valid JSON)
+- **openai** SDK (pointed at OpenRouter) + **Zod** — structured outputs (guaranteed-valid JSON)
 - **dotenv** — environment config
 - **cors**, **morgan** — CORS + request logging
 - ES modules (`"type": "module"`)
@@ -21,7 +21,7 @@ form-strat-backend/
 │   ├── config/
 │   │   ├── env.js          # Validated environment config
 │   │   ├── db.js           # pg connection pool + query() helper
-│   │   └── anthropic.js    # Lazy Anthropic client (503 if no API key)
+│   │   └── openrouter.js   # Lazy OpenAI-compatible client (503 if no API key)
 │   ├── ai/
 │   │   └── schemas.js      # Zod schemas for AI structured outputs
 │   ├── controllers/
@@ -101,9 +101,10 @@ Base URL: `http://localhost:4000/api`
 
 ### AI endpoints
 
-These require `ANTHROPIC_API_KEY` to be set (otherwise they return `503`). They
-use Claude with **structured outputs**, so responses are always valid JSON
-matching the form-field schema.
+These require `OPENROUTER_API_KEY` to be set (otherwise they return `503`). They
+use an LLM via OpenRouter with **structured outputs**, so responses are always
+valid JSON matching the form-field schema. Set `AI_MODEL` to any OpenRouter
+model that supports structured outputs (default `openai/gpt-4o-mini`).
 
 | Method | Endpoint              | Description                                          |
 | ------ | --------------------- | --------------------------------------------------- |

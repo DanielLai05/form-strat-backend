@@ -22,10 +22,13 @@ export const env = {
     .map((origin) => origin.trim())
     .filter(Boolean),
   // Optional at boot so the server still runs without AI configured; the AI
-  // endpoints surface a clear 503 when it's missing (see config/anthropic.js).
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
-  // Model used for all AI features. Override per-environment if needed.
-  aiModel: process.env.AI_MODEL || 'claude-opus-4-8',
+  // endpoints surface a clear 503 when it's missing (see config/openrouter.js).
+  openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
+  // OpenRouter model id (provider/model). Must support structured outputs.
+  // Override per-environment, e.g. anthropic/claude-sonnet-4 or openai/gpt-4o.
+  aiModel: process.env.AI_MODEL || 'openai/gpt-4o-mini',
+  // Optional: your app URL, sent to OpenRouter as HTTP-Referer for attribution.
+  appUrl: process.env.APP_URL || '',
 };
 
 export const isProd = env.nodeEnv === 'production';

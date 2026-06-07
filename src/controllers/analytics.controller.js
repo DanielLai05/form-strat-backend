@@ -1,40 +1,41 @@
-import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+import { zodResponseFormat } from 'openai/helpers/zod';
 import { query } from '../config/db.js';
-import { getAnthropic, isAiConfigured } from '../config/anthropic.js';
+import { getAIClient, isAiConfigured } from '../config/openrouter.js';
 import { env } from '../config/env.js';
 import { ApiError } from '../utils/ApiError.js';
 import { computeStats } from '../services/analytics.service.js';
 import { analyticsInsightsSchema } from '../ai/schemas.js';
 
-/** Ask Claude to interpret the pre-computed stats. Returns null on any failure. */
+/** Ask the model to interpret the pre-computed stats. Returns null on any failure. */
 const generateInsights = async (form, stats) => {
   if (!isAiConfigured()) return null;
 
-  const client = getAnthropic();
+  const client = getAIClient();
   const payload = JSON.stringify(
     { form: { title: form.title, description: form.description }, stats },
     null,
     2
   );
 
-  const message = await client.beta.messages.parse({
+  const completion = await client.chat.completions.parse({
     model: env.aiModel,
-    max_tokens: 2048,
-    thinking: { type: 'adaptive' },
-    system:
-      'You are a data analyst. You are given aggregated statistics for a form ' +
-      "and its responses. Interpret the numbers — do not invent data that isn't " +
-      'present. Be specific and reference the actual figures.',
     messages: [
+      {
+        role: 'system',
+        content:
+          'You are a data analyst. You are given aggregated statistics for a form ' +
+          "and its responses. Interpret the numbers — do not invent data that isn't " +
+          'present. Be specific and reference the actual figures.',
+      },
       {
         role: 'user',
         content: `Analyze these form-response statistics:\n\n${payload}`,
       },
     ],
-    output_format: betaZodOutputFormat(analyticsInsightsSchema, 'insights'),
+    response_format: zodResponseFormat(analyticsInsightsSchema, 'insights'),
   });
 
-  return message.parsed_output ?? null;
+  return completion.choices[0]?.message?.parsed ?? null;
 };
 
 /**
