@@ -9,6 +9,7 @@ import {
   listSubmissions,
   createSubmission,
 } from '../controllers/form.controller.js';
+import { getAnalytics } from '../controllers/analytics.controller.js';
 
 const router = Router();
 
@@ -24,5 +25,7 @@ router
   .route('/:id/submissions')
   .get(asyncHandler(listSubmissions))
   .post(asyncHandler(createSubmission));
+
+router.get('/:id/analytics', asyncHandler(getAnalytics));
 
 export default router;

@@ -3,12 +3,17 @@ import { env } from './env.js';
 
 const { Pool } = pg;
 
+// Hosted Postgres (Neon, Supabase, Heroku, etc.) requires SSL. If the
+// connection string asks for it, enable SSL on the driver.
+const needsSsl = /\bsslmode=require\b/.test(env.databaseUrl);
+
 /**
  * A single shared connection pool for the whole app. The pool manages and
  * reuses client connections, so we never open one per request.
  */
 export const pool = new Pool({
   connectionString: env.databaseUrl,
+  ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
 });
 
 pool.on('error', (err) => {
