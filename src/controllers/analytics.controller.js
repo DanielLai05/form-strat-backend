@@ -45,8 +45,8 @@ const generateInsights = async (form, stats) => {
  */
 export const getAnalytics = async (req, res) => {
   const formResult = await query(
-    `SELECT id, title, description, fields FROM forms WHERE id = $1`,
-    [req.params.id]
+    `SELECT id, title, description, fields FROM forms WHERE id = $1 AND user_id = $2`,
+    [req.params.id, req.user.uid]
   );
   if (formResult.rowCount === 0) throw ApiError.notFound('Form not found');
   const form = formResult.rows[0];

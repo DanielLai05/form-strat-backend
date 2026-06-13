@@ -29,6 +29,14 @@ export const env = {
   aiModel: process.env.AI_MODEL || 'openai/gpt-4o-mini',
   // Optional: your app URL, sent to OpenRouter as HTTP-Referer for attribution.
   appUrl: process.env.APP_URL || '',
+  // Firebase Admin service-account credentials — used to verify ID tokens.
+  // Optional at boot; protected routes return 503 until these are set.
+  firebase: {
+    projectId: process.env.FIREBASE_PROJECT_ID || '',
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
+    // The private key in .env keeps literal "\n" sequences; restore real newlines.
+    privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+  },
 };
 
 export const isProd = env.nodeEnv === 'production';

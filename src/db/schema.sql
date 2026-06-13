@@ -5,6 +5,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto"; -- provides gen_random_uuid()
 
 CREATE TABLE IF NOT EXISTS forms (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- Firebase UID of the owner. Nullable so legacy rows survive the migration.
+  user_id     TEXT,
   title       TEXT NOT NULL,
   description TEXT,
   -- Array of field definitions, e.g. [{ "type": "text", "label": "Name" }]
@@ -13,6 +15,10 @@ CREATE TABLE IF NOT EXISTS forms (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Idempotent: add user_id to tables created before ownership existed.
+ALTER TABLE forms ADD COLUMN IF NOT EXISTS user_id TEXT;
+CREATE INDEX IF NOT EXISTS forms_user_id_idx ON forms(user_id);
 
 CREATE TABLE IF NOT EXISTS submissions (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
