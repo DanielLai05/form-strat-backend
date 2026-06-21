@@ -25,10 +25,14 @@ CREATE TABLE IF NOT EXISTS forms (
   -- is a normalized mirror of this, kept in sync on every write.
   fields      JSONB NOT NULL DEFAULT '[]'::jsonb,
   published   BOOLEAN NOT NULL DEFAULT false,
+  -- Public URL of the cover banner image (uploaded to Firebase Storage).
+  banner_url  TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Idempotent: add banner_url to tables created before it existed.
+ALTER TABLE forms ADD COLUMN IF NOT EXISTS banner_url TEXT;
 CREATE INDEX IF NOT EXISTS forms_owner_id_idx ON forms(owner_id);
 
 -- Normalized projection of forms.fields. One row per field, upserted whenever a

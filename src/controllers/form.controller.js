@@ -12,6 +12,7 @@ const FORM_COLS = `
   description,
   fields,
   published,
+  banner_url AS "bannerUrl",
   created_at AS "createdAt",
   updated_at AS "updatedAt"
 `;
@@ -44,7 +45,7 @@ export const getForm = async (req, res) => {
 
 /** POST /api/forms — create a form owned by the signed-in user. */
 export const createForm = async (req, res) => {
-  const { title, description, fields, published } = req.body ?? {};
+  const { title, description, fields, published, bannerUrl } = req.body ?? {};
 
   if (!title || typeof title !== 'string') {
     throw ApiError.badRequest('"title" is required and must be a string');
@@ -55,8 +56,8 @@ export const createForm = async (req, res) => {
 
   const form = await withTransaction(async (client) => {
     const { rows } = await client.query(
-      `INSERT INTO forms (owner_id, title, description, fields, published)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO forms (owner_id, title, description, fields, published, banner_url)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${FORM_COLS}`,
       [
         req.user.uid,
@@ -64,6 +65,7 @@ export const createForm = async (req, res) => {
         description ?? null,
         JSON.stringify(fields ?? []),
         Boolean(published),
+        bannerUrl ?? null,
       ]
     );
     // Mirror the field definitions into the normalized form_fields table.
@@ -76,7 +78,7 @@ export const createForm = async (req, res) => {
 
 /** PATCH /api/forms/:id — update a form the user owns (only provided fields). */
 export const updateForm = async (req, res) => {
-  const { title, description, fields, published } = req.body ?? {};
+  const { title, description, fields, published, bannerUrl } = req.body ?? {};
 
   if (fields !== undefined && !Array.isArray(fields)) {
     throw ApiError.badRequest('"fields" must be an array');
@@ -102,6 +104,10 @@ export const updateForm = async (req, res) => {
   if (published !== undefined) {
     updates.push(`published = $${i++}`);
     values.push(Boolean(published));
+  }
+  if (bannerUrl !== undefined) {
+    updates.push(`banner_url = $${i++}`);
+    values.push(bannerUrl || null);
   }
 
   if (updates.length === 0) {
