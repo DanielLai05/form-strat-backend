@@ -1,5 +1,9 @@
-import { query } from '../config/db.js';
+import { query, withTransaction } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
+import {
+  syncFormFields,
+  insertSubmissionAnswers,
+} from '../services/normalize.service.js';
 
 // Columns returned to clients, aliased to camelCase for the frontend.
 const FORM_COLS = `
@@ -18,7 +22,7 @@ export const listForms = async (req, res) => {
     `SELECT ${FORM_COLS},
             (SELECT COUNT(*)::int FROM submissions s WHERE s.form_id = f.id) AS "submissionCount"
        FROM forms f
-       WHERE f.user_id = $1
+       WHERE f.owner_id = $1
        ORDER BY created_at DESC`,
     [req.user.uid]
   );
@@ -49,19 +53,25 @@ export const createForm = async (req, res) => {
     throw ApiError.badRequest('"fields" must be an array');
   }
 
-  const { rows } = await query(
-    `INSERT INTO forms (user_id, title, description, fields, published)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING ${FORM_COLS}`,
-    [
-      req.user.uid,
-      title.trim(),
-      description ?? null,
-      JSON.stringify(fields ?? []),
-      Boolean(published),
-    ]
-  );
-  res.status(201).json({ data: rows[0] });
+  const form = await withTransaction(async (client) => {
+    const { rows } = await client.query(
+      `INSERT INTO forms (owner_id, title, description, fields, published)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING ${FORM_COLS}`,
+      [
+        req.user.uid,
+        title.trim(),
+        description ?? null,
+        JSON.stringify(fields ?? []),
+        Boolean(published),
+      ]
+    );
+    // Mirror the field definitions into the normalized form_fields table.
+    await syncFormFields(client, rows[0].id, fields ?? []);
+    return rows[0];
+  });
+
+  res.status(201).json({ data: form });
 };
 
 /** PATCH /api/forms/:id — update a form the user owns (only provided fields). */
@@ -103,21 +113,30 @@ export const updateForm = async (req, res) => {
   const ownerParam = i + 1;
   values.push(req.user.uid);
 
-  // Scoped to owner: a non-owner gets 0 rows -> 404 (don't reveal existence).
-  const { rows } = await query(
-    `UPDATE forms SET ${updates.join(', ')}
-       WHERE id = $${idParam} AND user_id = $${ownerParam}
-       RETURNING ${FORM_COLS}`,
-    values
-  );
-  if (rows.length === 0) throw ApiError.notFound('Form not found');
-  res.json({ data: rows[0] });
+  const form = await withTransaction(async (client) => {
+    // Scoped to owner: a non-owner gets 0 rows -> 404 (don't reveal existence).
+    const { rows } = await client.query(
+      `UPDATE forms SET ${updates.join(', ')}
+         WHERE id = $${idParam} AND owner_id = $${ownerParam}
+         RETURNING ${FORM_COLS}`,
+      values
+    );
+    if (rows.length === 0) throw ApiError.notFound('Form not found');
+
+    // Re-sync the normalized fields whenever the field definitions changed.
+    if (fields !== undefined) {
+      await syncFormFields(client, rows[0].id, fields);
+    }
+    return rows[0];
+  });
+
+  res.json({ data: form });
 };
 
 /** DELETE /api/forms/:id — delete a form the user owns (submissions cascade). */
 export const deleteForm = async (req, res) => {
   const { rowCount } = await query(
-    'DELETE FROM forms WHERE id = $1 AND user_id = $2',
+    'DELETE FROM forms WHERE id = $1 AND owner_id = $2',
     [req.params.id, req.user.uid]
   );
   if (rowCount === 0) throw ApiError.notFound('Form not found');
@@ -127,7 +146,7 @@ export const deleteForm = async (req, res) => {
 /** GET /api/forms/:id/submissions — list submissions (owner only). */
 export const listSubmissions = async (req, res) => {
   const owned = await query(
-    'SELECT 1 FROM forms WHERE id = $1 AND user_id = $2',
+    'SELECT 1 FROM forms WHERE id = $1 AND owner_id = $2',
     [req.params.id, req.user.uid]
   );
   if (owned.rowCount === 0) throw ApiError.notFound('Form not found');
@@ -147,21 +166,35 @@ export const listSubmissions = async (req, res) => {
  * Public: respondents don't need an account.
  */
 export const createSubmission = async (req, res) => {
-  const exists = await query('SELECT 1 FROM forms WHERE id = $1', [
-    req.params.id,
-  ]);
-  if (exists.rowCount === 0) throw ApiError.notFound('Form not found');
+  // Need the field definitions to type each answer correctly.
+  const formRes = await query(
+    'SELECT id, fields FROM forms WHERE id = $1',
+    [req.params.id]
+  );
+  if (formRes.rowCount === 0) throw ApiError.notFound('Form not found');
+  const form = formRes.rows[0];
 
   const { data } = req.body ?? {};
   if (data === undefined || typeof data !== 'object' || Array.isArray(data)) {
     throw ApiError.badRequest('"data" is required and must be an object');
   }
 
-  const { rows } = await query(
-    `INSERT INTO submissions (form_id, data)
-     VALUES ($1, $2)
-     RETURNING id, form_id AS "formId", data, created_at AS "createdAt"`,
-    [req.params.id, JSON.stringify(data)]
-  );
-  res.status(201).json({ data: rows[0] });
+  const submission = await withTransaction(async (client) => {
+    const { rows } = await client.query(
+      `INSERT INTO submissions (form_id, data)
+       VALUES ($1, $2)
+       RETURNING id, form_id AS "formId", data, created_at AS "createdAt"`,
+      [form.id, JSON.stringify(data)]
+    );
+    // Expand the raw answers into typed submission_answers rows.
+    await insertSubmissionAnswers(client, {
+      submissionId: rows[0].id,
+      formId: form.id,
+      fields: form.fields,
+      data,
+    });
+    return rows[0];
+  });
+
+  res.status(201).json({ data: submission });
 };

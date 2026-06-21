@@ -1,4 +1,5 @@
-import admin from 'firebase-admin';
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { env } from './env.js';
 import { ApiError } from '../utils/ApiError.js';
 
@@ -23,15 +24,17 @@ export const getFirebaseAuth = () => {
     );
   }
   if (!app) {
-    app = admin.apps.length
-      ? admin.app()
-      : admin.initializeApp({
-          credential: admin.credential.cert({
-            projectId: env.firebase.projectId,
-            clientEmail: env.firebase.clientEmail,
-            privateKey: env.firebase.privateKey,
-          }),
-        });
+    // firebase-admin v14 uses the modular API (firebase-admin/app, /auth)
+    // instead of the old `admin.apps` / `admin.credential` namespace.
+    app =
+      getApps()[0] ??
+      initializeApp({
+        credential: cert({
+          projectId: env.firebase.projectId,
+          clientEmail: env.firebase.clientEmail,
+          privateKey: env.firebase.privateKey,
+        }),
+      });
   }
-  return admin.auth(app);
+  return getAuth(app);
 };

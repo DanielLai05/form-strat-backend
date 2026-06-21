@@ -29,5 +29,31 @@ pool.on('error', (err) => {
  */
 export const query = (text, params) => pool.query(text, params);
 
+/**
+ * Run `fn` inside a single transaction, passing it a dedicated client. Commits
+ * if `fn` resolves, rolls back if it throws, and always releases the client.
+ * Use this when several writes must succeed or fail together (e.g. inserting a
+ * submission and its typed answer rows).
+ *
+ *   await withTransaction(async (client) => {
+ *     await client.query('INSERT ...');
+ *     await client.query('INSERT ...');
+ *   });
+ */
+export const withTransaction = async (fn) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
 /** Close the pool (used on graceful shutdown). */
 export const closePool = () => pool.end();

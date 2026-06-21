@@ -45,21 +45,14 @@ const generateInsights = async (form, stats) => {
  */
 export const getAnalytics = async (req, res) => {
   const formResult = await query(
-    `SELECT id, title, description, fields FROM forms WHERE id = $1 AND user_id = $2`,
+    `SELECT id, title, description, fields FROM forms WHERE id = $1 AND owner_id = $2`,
     [req.params.id, req.user.uid]
   );
   if (formResult.rowCount === 0) throw ApiError.notFound('Form not found');
   const form = formResult.rows[0];
 
-  const subResult = await query(
-    `SELECT data, created_at AS "createdAt"
-       FROM submissions
-       WHERE form_id = $1
-       ORDER BY created_at ASC`,
-    [req.params.id]
-  );
-
-  const stats = computeStats(form, subResult.rows);
+  // Aggregated in SQL over the typed submission_answers table.
+  const stats = await computeStats(form);
 
   // AI narrative is opt-out via ?ai=false, and skipped automatically when there
   // are no submissions to analyze.
