@@ -14,6 +14,10 @@ const needsSsl = /\bsslmode=require\b/.test(env.databaseUrl);
 export const pool = new Pool({
   connectionString: env.databaseUrl,
   ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+  // On Vercel each serverless invocation is a fresh isolate; cap connections so
+  // many concurrent instances don't exhaust the database. Locally, use the
+  // driver's default pool size.
+  ...(process.env.VERCEL ? { max: 1 } : {}),
 });
 
 pool.on('error', (err) => {
