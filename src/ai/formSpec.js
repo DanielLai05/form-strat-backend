@@ -35,6 +35,7 @@ ${catalog}
 Rules:
 - Include "options" (a non-empty array of strings) ONLY for select, radio, and checkbox. Omit it for every other type.
 - Include "max" (an integer such as 5) ONLY for rating. Omit it otherwise.
+- For rating fields, do NOT put scale explanations (e.g. "1 = Not interested, 5 = Very interested") in "help" — the stars are self-explanatory; leave "help" as "".
 - "help" is an optional short hint shown under the question; use "" when not needed.
 - Set "required": true only for genuinely essential fields.
 - Include the fields a real form for this purpose needs — nothing extraneous.
